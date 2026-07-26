@@ -33,6 +33,15 @@ export const SLING = { x: -10, y: 2.2, maxPull: 3.2, maxSpeed: 27 };
 
 export const WORLD_BOUNDS = { minX: -14, maxX: 18, maxY: 9 };
 
+// Display name + time of day for each Burlington backdrop (each level's
+// `locale` keys into this). Used by the map headings and the intro placard.
+export const LOCALE_INFO = {
+  battery:    { name: 'Battery Park',   time: 'Golden Hour' },
+  waterfront: { name: 'The Waterfront', time: 'Golden Hour' },
+  oakledge:   { name: 'Oakledge',       time: 'Sundown' },
+  church:     { name: 'Church Street',  time: 'Dusk' },
+};
+
 // 12 levels. hint: dotted trajectory preview (teaching levels only).
 // stars are ascending score thresholds for 1★ / 2★ / 3★.
 export const LEVELS = [

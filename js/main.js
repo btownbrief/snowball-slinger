@@ -1,7 +1,7 @@
 // SNOWBALL SLINGER — screens, level map, progress, leaderboard wiring.
 // The 3D scene runs behind every screen; js/game.js owns actual play.
 
-import { LEVELS, AMMO } from './levels.js';
+import { LEVELS, AMMO, LOCALE_INFO } from './levels.js';
 import { createRenderer } from './render.js';
 import { createGame } from './game.js';
 import { sound } from './audio.js';
@@ -12,11 +12,8 @@ import {
 const $ = (id) => document.getElementById(id);
 const LS_PROGRESS = 'snowball-slinger.progress';
 
-const LOCALE_NAMES = {
-  battery: 'Battery Park', waterfront: 'The Waterfront',
-  oakledge: 'Oakledge', church: 'Church Street',
-};
 const AMMO_CLASS = { snow: 'am-snow', slush: 'am-slush', ice: 'am-ice' };
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ------------------------------------------------------------- progress
 function loadProgress() {
@@ -91,7 +88,24 @@ function startLevel(i) {
   showGameHud();
   $('levelName').textContent = `${i + 1}. ${LEVELS[i].name}`;
   game.start(i);
+  showPlacard(LEVELS[i].locale);
   toast(LEVELS[i].blurb);
+}
+
+// Locale placard: a brief "BATTERY PARK · GOLDEN HOUR" chip at level intro.
+let placardTimer = null;
+function showPlacard(locale) {
+  const el = $('placard');
+  const info = LOCALE_INFO[locale];
+  el.textContent = `${info.name} · ${info.time}`.toUpperCase();
+  clearTimeout(placardTimer);
+  el.classList.remove('hidden', 'fading');
+  if (!reducedMotion) { void el.offsetWidth; } // restart the entrance animation
+  placardTimer = setTimeout(() => {
+    if (reducedMotion) { el.classList.add('hidden'); return; } // plain show/hide
+    el.classList.add('fading');
+    placardTimer = setTimeout(() => el.classList.add('hidden'), 450);
+  }, 2000);
 }
 
 let toastTimer = null;
@@ -113,7 +127,7 @@ function buildMap() {
       lastLocale = lv.locale;
       const h = document.createElement('div');
       h.className = 'map-locale';
-      h.textContent = LOCALE_NAMES[lv.locale];
+      h.textContent = LOCALE_INFO[lv.locale].name;
       grid.appendChild(h);
     }
     const best = bestFor(i);

@@ -66,7 +66,9 @@ chrome --headless --screenshot=icon-180.png --window-size=180,180 "http://localh
 ## Vendored libraries
 
 - [three.js](https://threejs.org) r160 (`vendor/three.module.min.js`) — MIT license
+  (notice in the file's own header)
 - [cannon-es](https://github.com/pmndrs/cannon-es) 0.20.0 (`vendor/cannon-es.js`) — MIT license
+  (full text in `vendor/cannon-es.LICENSE.txt`)
 
 Both are checked in as single files on purpose: the site has no package
 manager and no build step.

@@ -1,6 +1,6 @@
-// Monthly public leaderboard backed by Supabase.
-// Database schema lives in supabase/schema.sql; one-time setup steps in
-// supabase/SETUP.md. Until the two values below are filled in, every
+// Monthly public leaderboard backed by Supabase — the shared Btown Games
+// backend (game-agnostic; slugs self-register on first score). This file is
+// the same across the fleet. Until the two values below are filled in, every
 // export here quietly no-ops and the game hides all leaderboard UI.
 //
 // No login: each browser mints a random player id + secret token in

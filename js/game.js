@@ -145,7 +145,7 @@ export function createGame(canvas, renderer, ui) {
     game.shotsUsed++;
     hudAmmo();
     // the loaded pouch mesh becomes the flying ball
-    if (game.loadedMesh) { game.loadedMesh.parent?.remove(game.loadedMesh); game.loadedMesh = null; }
+    if (game.loadedMesh) { renderer.releaseMesh(game.loadedMesh); game.loadedMesh = null; }
     const proj = game.sim.fire(type, v);
     proj.body.position.set(SLING.x + dx, Math.max(SLING.y + dy, 0.4), 0);
     game.activeProj = proj;
@@ -217,7 +217,7 @@ export function createGame(canvas, renderer, ui) {
 
   game.stop = () => {
     game.state = 'off';
-    if (game.loadedMesh) { game.loadedMesh.parent?.remove(game.loadedMesh); game.loadedMesh = null; }
+    if (game.loadedMesh) { renderer.releaseMesh(game.loadedMesh); game.loadedMesh = null; }
     if (game.activeProj) { renderer.removeBodyMesh(game.activeProj.body); game.activeProj = null; }
     renderer.setTrajectory(null);
     renderer.setPouch(null);

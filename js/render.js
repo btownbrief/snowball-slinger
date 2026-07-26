@@ -21,8 +21,37 @@ const COLORS = {
   ground: 0xffffff, squirrel: 0x8b8f99, cream: 0xe9e1d2, candy: 0xf0a83c,
 };
 
+// Blocked or unsupported WebGL would otherwise leave a blank page: show a
+// full-screen notice (styled like the game's cards) instead of a dead canvas.
+function showWebglNotice(canvas) {
+  const el = document.createElement('div');
+  el.className = 'screen';
+  el.id = 'webglFail';
+  el.innerHTML = `
+    <div class="menu-inner">
+      <div class="card">
+        <div class="card-title">THIS GAME NEEDS WEBGL</div>
+        <div class="card-sub">Your browser blocked or can't run 3D graphics.<br>
+          Updating the browser or turning off battery saver usually fixes it.</div>
+        <div class="card-btns">
+          <button class="big-btn" id="webglRetry">↻&nbsp;TRY AGAIN</button>
+          <a class="chip-btn" href="https://play.btownbrief.com/">MORE BTOWN GAMES&nbsp;→</a>
+        </div>
+      </div>
+    </div>`;
+  (canvas.parentElement || document.body).appendChild(el);
+  el.querySelector('#webglRetry').addEventListener('click', () => location.reload());
+}
+
 export function createRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    if (!renderer.getContext()) throw new Error('WebGL context unavailable');
+  } catch (err) {
+    showWebglNotice(canvas);
+    throw err; // stops main.js booting; the notice above is the whole UI now
+  }
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -366,8 +395,7 @@ export function createRenderer(canvas) {
 
   function buildLevel(sim, locale) {
     scene.remove(levelGroup);
-    const shared = new Set([...geoCache.values()]);
-    levelGroup.traverse((o) => { if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose(); });
+    disposeOwned(levelGroup);
     levelGroup = new THREE.Group();
     scene.add(levelGroup);
     bodyMeshes.clear();
@@ -393,11 +421,44 @@ export function createRenderer(canvas) {
     }
   }
 
-  function removeBodyMesh(body) {
+  // --------------------------------------------------- asset ownership
+  // Cached assets (geoCache boxes, matCache lamberts, iceMat, band/debris)
+  // are shared across meshes and live for the whole session — never dispose
+  // them. Anything a mesh creates for itself (per-instance geometry, one-off
+  // materials) is owned, and must be freed when the mesh is discarded or
+  // long sessions leak GPU memory on phones.
+  function isSharedGeo(geo) {
+    if (geo === debrisGeo || geo === bandGeo) return true;
+    for (const g of geoCache.values()) if (g === geo) return true;
+    return false;
+  }
+  function isSharedMat(mat) {
+    if (mat === iceMat || mat === bandMat) return true;
+    for (const m of matCache.values()) if (m === mat) return true;
+    return false;
+  }
+  function disposeOwned(root) {
+    root.traverse((o) => {
+      if (o.geometry && !isSharedGeo(o.geometry)) o.geometry.dispose();
+      if (o.material && !isSharedMat(o.material)) o.material.dispose();
+    });
+  }
+
+  // detach only — bonkSquirrel keeps the mesh alive for its send-off spiral
+  function detachBodyMesh(body) {
     const m = bodyMeshes.get(body.id);
     if (m) m.parent?.remove(m);
     bodyMeshes.delete(body.id);
     return m;
+  }
+  function removeBodyMesh(body) {
+    const m = detachBodyMesh(body);
+    if (m) disposeOwned(m);
+  }
+  // for meshes with no physics body (the loaded pouch ball in game.js)
+  function releaseMesh(m) {
+    m.parent?.remove(m);
+    disposeOwned(m);
   }
 
   // ------------------------------------------------------------ effects
@@ -454,7 +515,7 @@ export function createRenderer(canvas) {
         m.position.addScaledVector(vel, dt);
         m.rotation.z += 9 * dt;
         m.scale.setScalar(Math.max(0.001, life / 0.8));
-        if (life <= 0) { scene.remove(m); return false; }
+        if (life <= 0) { scene.remove(m); disposeOwned(m); return false; }
         return true;
       } });
     }
@@ -462,7 +523,7 @@ export function createRenderer(canvas) {
 
   // Cartoon bonk: the squirrel dizzy-spirals up and away, stars orbiting.
   function bonkSquirrel(body) {
-    const g = removeBodyMesh(body);
+    const g = detachBodyMesh(body);
     if (!g) return;
     scene.add(g);
     const start = g.position.clone();
@@ -489,7 +550,11 @@ export function createRenderer(canvas) {
         s.rotation.z += 8 * dt;
         s.scale.setScalar(k);
       });
-      if (t > 1.15) { scene.remove(g); stars.forEach((s) => scene.remove(s)); return false; }
+      if (t > 1.15) {
+        scene.remove(g); disposeOwned(g); // squirrel parts are per-instance
+        stars.forEach((s) => { scene.remove(s); disposeOwned(s); });
+        return false;
+      }
       return true;
     } });
   }
@@ -622,7 +687,7 @@ export function createRenderer(canvas) {
   }
 
   return {
-    update, resize, buildLevel, attachProjectile, syncBodies, removeBodyMesh,
+    update, resize, buildLevel, attachProjectile, syncBodies, removeBodyMesh, releaseMesh,
     burstDebris, puff, sparkles, bonkSquirrel, squash,
     setCameraMode, pointerToWorld, worldToScreen, setPouch, setTrajectory,
     projectileMesh, POUCH_REST, colors: COLORS,
