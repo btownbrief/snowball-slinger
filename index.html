@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#122a45">
+<title>SNOWBALL SLINGER — Topple the Squirrel Snow Forts</title>
+<meta name="description" content="Burlington's squirrels stole the maple-candy stash and built snow forts all over town. Slingshot snowballs, topple the forts, win it back. A 3D Btown Games production from the BTown Brief.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SNOWBALL SLINGER — Topple the Squirrel Snow Forts">
+<meta property="og:description" content="Slingshot snowballs at squirrel snow forts across Burlington — Battery Park to Church Street. Win back the maple candy!">
+<meta property="og:url" content="https://play.btownbrief.com/snowball-slinger/">
+<meta property="og:image" content="https://play.btownbrief.com/snowball-slinger/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://play.btownbrief.com/snowball-slinger/og-image.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- in-game HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-top">
+      <button id="hudMapBtn" class="hud-chip" aria-label="Back to map">🗺</button>
+      <div id="hud-mid">
+        <div id="score">0</div>
+        <div id="levelName"></div>
+      </div>
+      <button id="hudRetryBtn" class="hud-chip" aria-label="Restart level">↻</button>
+    </div>
+    <div id="hud-ammo">
+      <div id="ammoRow"></div>
+      <div id="ammoName"></div>
+    </div>
+    <div id="toast" class="hidden"></div>
+  </div>
+
+  <button id="mute" aria-label="Toggle sound">🔊</button>
+
+  <!-- title screen -->
+  <div id="menu" class="screen">
+    <div class="menu-inner">
+      <div id="logo" aria-label="Snowball Slinger">
+        <span class="l-snowball">SNOWBALL</span>
+        <span class="l-slinger"><i>S</i><i>L</i><i>I</i><i>N</i><i>G</i><i>E</i><i>R</i></span>
+      </div>
+      <div id="tagline">The squirrels raided Burlington's maple-candy stash<br>
+        and built snow forts all over town. <strong>Sling it back.</strong></div>
+      <button id="playBtn" class="big-btn">🎯&nbsp; SLING</button>
+      <button id="menuMapBtn" class="chip-btn">🗺&nbsp; LEVEL MAP</button>
+      <div id="howto">
+        <span class="key">DRAG</span><span class="key">AIM</span><span class="key">RELEASE</span>
+        <div class="howto-sub">pull back by the slingshot · squirrels dizzy off unharmed</div>
+      </div>
+    </div>
+    <footer id="credit">
+      A Btown Games production · <a href="https://www.btownbrief.com" target="_blank" rel="noopener">Read the BTown Brief →</a>
+    </footer>
+  </div>
+
+  <!-- level select map -->
+  <div id="map" class="screen hidden">
+    <div class="map-inner">
+      <div class="map-head">
+        <button id="mapBackBtn" class="hud-chip" aria-label="Back">←</button>
+        <div>
+          <div class="map-title">SNOW FORT MAP</div>
+          <div class="map-sub">total <strong id="mapTotal">0</strong> · <span id="mapStars"></span></div>
+        </div>
+        <button id="shareBtn" class="hud-chip" aria-label="Share">📣</button>
+      </div>
+      <div id="mapGrid"></div>
+
+      <div class="lb hidden" id="lb">
+        <div class="lb-tabs">
+          <button class="lb-chip sel" id="lbThisBtn">🏆 THIS MONTH</button>
+          <button class="lb-chip" id="lbLastBtn">LAST MONTH</button>
+        </div>
+        <div class="lb-status" id="lbStatus"></div>
+        <ol id="lbList"></ol>
+        <div class="lb-form hidden" id="lbForm">
+          <input id="lbNameInput" maxlength="20" placeholder="Your name" autocomplete="off" />
+          <button class="lb-chip" id="lbSaveBtn">SAVE</button>
+        </div>
+        <button class="lb-chip lb-rename hidden" id="lbRenameBtn">✏️ CHANGE NAME</button>
+      </div>
+      <footer class="map-credit">
+        A Btown Games production · <a href="https://www.btownbrief.com" target="_blank" rel="noopener">Read the BTown Brief →</a>
+      </footer>
+    </div>
+  </div>
+
+  <!-- level cleared -->
+  <div id="clear" class="screen hidden">
+    <div class="menu-inner">
+      <div class="card">
+        <div id="clearStars"><span class="st">★</span><span class="st">★</span><span class="st">★</span></div>
+        <div id="clearTitle" class="card-title">FORT TOPPLED!</div>
+        <div id="clearScore" class="card-big">0</div>
+        <div id="clearBonus" class="card-sub"></div>
+        <div id="clearBest" class="card-sub dim"></div>
+        <div class="card-btns">
+          <button id="clearReplay" class="chip-btn">↻&nbsp;REPLAY</button>
+          <button id="clearMapBtn" class="chip-btn">🗺&nbsp;MAP</button>
+          <button id="nextBtn" class="big-btn">NEXT&nbsp;▶</button>
+        </div>
+        <a class="brief-cta" href="https://www.btownbrief.com" target="_blank" rel="noopener">
+          🗞️ The squirrels read it. So should you.<br><strong>Read the BTown Brief →</strong>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- out of snowballs -->
+  <div id="fail" class="screen hidden">
+    <div class="menu-inner">
+      <div class="card">
+        <div class="card-title">THE SQUIRRELS HELD THE FORT!</div>
+        <div class="card-sub">out of snowballs · score <span id="failScore">0</span></div>
+        <div class="card-btns">
+          <button id="failMapBtn" class="chip-btn">🗺&nbsp;MAP</button>
+          <button id="failRetryBtn" class="big-btn">↻&nbsp;RETRY</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
