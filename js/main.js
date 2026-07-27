@@ -89,7 +89,16 @@ function startLevel(i) {
   $('levelName').textContent = `${i + 1}. ${LEVELS[i].name}`;
   game.start(i);
   showPlacard(LEVELS[i].locale);
-  toast(LEVELS[i].blurb);
+  // The dotted aim line is a teaching aid on levels 1-3 only. Say so once, on
+  // the first level without it, so its absence doesn't read as a bug.
+  const aimLineGone = !LEVELS[i].hint && i > 0 && LEVELS[i - 1].hint;
+  if (aimLineGone && !progress.aimTipSeen) {
+    progress.aimTipSeen = true;
+    saveProgress(progress);
+    toast(LEVELS[i].blurb, 'Training wheels off: no more dotted aim line. Eyeball it.');
+  } else {
+    toast(LEVELS[i].blurb);
+  }
 }
 
 // Locale placard: a brief "BATTERY PARK · GOLDEN HOUR" chip at level intro.
@@ -108,13 +117,22 @@ function showPlacard(locale) {
   }, 2000);
 }
 
+// Extra arguments queue up and play one after another.
 let toastTimer = null;
-function toast(text) {
+let toastQueue = [];
+function toast(text, ...rest) {
+  toastQueue = rest;
+  showToast(text);
+}
+function showToast(text) {
   const el = $('toast');
   el.textContent = text;
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+  toastTimer = setTimeout(() => {
+    if (toastQueue.length) { showToast(toastQueue.shift()); return; }
+    el.classList.add('hidden');
+  }, 3200);
 }
 
 // -------------------------------------------------------------- level map
