@@ -32,6 +32,13 @@
       <div id="hud-mid">
         <div id="score">0</div>
         <div id="levelName"></div>
+        <div id="starMeter" role="progressbar" aria-label="Star score progress"
+          aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
+          <span class="star-segment"><span class="star-fill"></span><b aria-hidden="true">★</b></span>
+          <span class="star-segment"><span class="star-fill"></span><b aria-hidden="true">★</b></span>
+          <span class="star-segment"><span class="star-fill"></span><b aria-hidden="true">★</b></span>
+        </div>
+        <div id="starNeed"></div>
       </div>
       <button id="hudRetryBtn" class="hud-chip" aria-label="Restart level">↻</button>
     </div>
@@ -42,6 +49,9 @@
     <div id="placard" class="hidden"></div>
     <div id="toast" class="hidden"></div>
   </div>
+
+  <div id="chainChip" class="hidden" aria-hidden="true"></div>
+  <div id="announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <button id="mute" aria-label="Toggle sound">🔊</button>
 

@@ -14,6 +14,10 @@ const LS_PROGRESS = 'snowball-slinger.progress';
 
 const AMMO_CLASS = { snow: 'am-snow', slush: 'am-slush', ice: 'am-ice' };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let activeLevelIndex = 0;
+let presentationRun = 0;
+let chainTimer = null;
+let clearScoreFrame = null;
 
 // ------------------------------------------------------------- progress
 function loadProgress() {
@@ -34,6 +38,7 @@ const renderer = createRenderer(canvas);
 const ui = {
   onScore(total, delta, screenPos) {
     $('score').textContent = total.toLocaleString();
+    updateStarMeter(total);
     if (delta) {
       $('score').classList.remove('pop'); void $('score').offsetWidth;
       $('score').classList.add('pop');
@@ -43,9 +48,11 @@ const ui = {
   onAmmo(queue) {
     const row = $('ammoRow');
     row.innerHTML = '';
+    const lastSnowball = queue.length === 1;
+    $('hud').classList.toggle('last-snowball', lastSnowball);
     queue.forEach((type, i) => {
       const dot = document.createElement('span');
-      dot.className = `ammo-dot ${AMMO_CLASS[type]}${i === 0 ? ' loaded' : ''}`;
+      dot.className = `ammo-dot ${AMMO_CLASS[type]}${i === 0 ? ' loaded' : ''}${lastSnowball ? ' last' : ''}`;
       dot.title = AMMO[type].label;
       row.appendChild(dot);
     });
@@ -53,15 +60,66 @@ const ui = {
   onLoaded(type) {
     $('ammoName').textContent = AMMO[type].label.toUpperCase();
   },
+  onChain(hits, points) { showChain(hits, points); },
   onWin(r) { onLevelWon(r); },
   onLose(r) {
-    setTimeout(() => {
-      $('failScore').textContent = r.score.toLocaleString();
-      show('fail');
-    }, 700);
+    $('failScore').textContent = r.score.toLocaleString();
+    announce(`Out of snowballs. Score ${r.score.toLocaleString()}.`);
+    show('fail');
   },
 };
 const game = createGame(canvas, renderer, ui);
+
+function updateStarMeter(score) {
+  const thresholds = LEVELS[activeLevelIndex].stars;
+  const fills = [...document.querySelectorAll('#starMeter .star-fill')];
+  fills.forEach((fill, i) => {
+    const from = i === 0 ? 0 : thresholds[i - 1];
+    const pct = Math.max(0, Math.min(1, (score - from) / (thresholds[i] - from)));
+    fill.style.width = `${pct * 100}%`;
+  });
+  const next = thresholds.findIndex((threshold) => score < threshold);
+  const label = next < 0
+    ? '3 stars secured'
+    : `${(thresholds[next] - score).toLocaleString()} from the ${['1st', '2nd', '3rd'][next]} star`;
+  $('starNeed').textContent = label;
+  $('starMeter').setAttribute('aria-valuemax', thresholds[2]);
+  $('starMeter').setAttribute('aria-valuenow', Math.min(score, thresholds[2]));
+  $('starMeter').setAttribute('aria-valuetext', label);
+}
+
+function announce(text) {
+  $('announcer').textContent = text;
+}
+
+function resetPresentations() {
+  presentationRun++;
+  clearTimeout(chainTimer);
+  cancelAnimationFrame(clearScoreFrame);
+  chainTimer = null;
+  clearScoreFrame = null;
+  $('chainChip').classList.add('hidden');
+  $('chainChip').classList.remove('showing');
+  $('hud').classList.remove('last-snowball');
+  document.querySelectorAll('.float-pts, .clear-spark').forEach((el) => el.remove());
+}
+
+function showChain(hits, points) {
+  const runId = presentationRun;
+  const text = `×${hits} CHAIN · +${points.toLocaleString()}`;
+  const chip = $('chainChip');
+  clearTimeout(chainTimer);
+  chip.textContent = text;
+  chip.classList.remove('hidden', 'showing');
+  if (!reducedMotion) void chip.offsetWidth;
+  chip.classList.add('showing');
+  announce(`${hits} hit chain, ${points.toLocaleString()} points.`);
+  chainTimer = setTimeout(() => {
+    if (presentationRun !== runId) return;
+    chip.classList.add('hidden');
+    chip.classList.remove('showing');
+  }, 1250);
+}
 
 function floatText(text, { x, y }) {
   const el = document.createElement('div');
@@ -84,6 +142,8 @@ function showGameHud() {
 }
 
 function startLevel(i) {
+  resetPresentations();
+  activeLevelIndex = i;
   sound.unlock(); sound.blip();
   showGameHud();
   $('levelName').textContent = `${i + 1}. ${LEVELS[i].name}`;
@@ -157,21 +217,66 @@ function onLevelWon({ levelIndex, score, stars, bonus, shots }) {
   saveProgress(progress);
   submitTotal();
 
-  setTimeout(() => {
-    $('clearTitle').textContent = ['', 'FORT TOPPLED!', 'GREAT SLINGING!', 'MAPLE PERFECT!'][stars];
-    $('clearScore').textContent = score.toLocaleString();
-    $('clearBonus').textContent = bonus ? `includes +${bonus.toLocaleString()} for unused snowballs` : 'no snowballs to spare!';
-    $('clearBest').textContent = `level best ${progress.levels[levelIndex].score.toLocaleString()} · total ${totalBest().toLocaleString()}`;
-    const starEls = [...document.querySelectorAll('#clearStars .st')];
-    starEls.forEach((el, i) => {
-      el.classList.remove('lit', 'bounce');
-      if (i < stars) setTimeout(() => { el.classList.add('lit', 'bounce'); sound.sparkle(); }, 350 + i * 380);
-    });
-    $('nextBtn').classList.toggle('hidden', levelIndex >= LEVELS.length - 1);
-    $('nextBtn').dataset.next = levelIndex + 1;
-    $('clearReplay').dataset.level = levelIndex;
-    show('clear');
-  }, 900);
+  $('clearTitle').textContent = ['', 'FORT TOPPLED!', 'GREAT SLINGING!', 'MAPLE PERFECT!'][stars];
+  $('clearScore').textContent = reducedMotion ? score.toLocaleString() : '0';
+  $('clearBonus').textContent = bonus ? `includes +${bonus.toLocaleString()} for unused snowballs` : 'no snowballs to spare!';
+  $('clearBest').textContent = `level best ${progress.levels[levelIndex].score.toLocaleString()} · total ${totalBest().toLocaleString()}`;
+  const starEls = [...document.querySelectorAll('#clearStars .st')];
+  starEls.forEach((el) => {
+    el.classList.remove('lit', 'bounce');
+    el.querySelectorAll('.clear-spark').forEach((spark) => spark.remove());
+  });
+  $('nextBtn').classList.toggle('hidden', levelIndex >= LEVELS.length - 1);
+  $('nextBtn').dataset.next = levelIndex + 1;
+  $('clearReplay').dataset.level = levelIndex;
+  show('clear');
+  announce(`${$('clearTitle').textContent} ${stars} stars. Score ${score.toLocaleString()}.`);
+  revealClearScore(score, stars, LEVELS[levelIndex].stars, starEls);
+}
+
+function lightClearStar(el) {
+  if (el.classList.contains('lit')) return;
+  el.classList.add('lit');
+  if (reducedMotion) return;
+  el.classList.add('bounce');
+  sound.sparkle();
+  for (let i = 0; i < 6; i++) {
+    const spark = document.createElement('i');
+    const angle = (i / 6) * Math.PI * 2;
+    spark.className = 'clear-spark';
+    spark.style.setProperty('--spark-x', `${Math.cos(angle) * 34}px`);
+    spark.style.setProperty('--spark-y', `${Math.sin(angle) * 34}px`);
+    el.appendChild(spark);
+    setTimeout(() => spark.remove(), 650);
+  }
+}
+
+function revealClearScore(score, stars, thresholds, starEls) {
+  if (reducedMotion) {
+    starEls.slice(0, stars).forEach(lightClearStar);
+    return;
+  }
+  const runId = presentationRun;
+  const started = performance.now();
+  const duration = 720;
+  function frame(now) {
+    if (presentationRun !== runId) return;
+    const progress = Math.min(1, (now - started) / duration);
+    const eased = 1 - (1 - progress) ** 3;
+    const shown = Math.round(score * eased);
+    $('clearScore').textContent = shown.toLocaleString();
+    for (let i = 0; i < stars; i++) {
+      if (shown >= Math.min(score, thresholds[i])) lightClearStar(starEls[i]);
+    }
+    if (progress < 1) {
+      clearScoreFrame = requestAnimationFrame(frame);
+    } else {
+      $('clearScore').textContent = score.toLocaleString();
+      starEls.slice(0, stars).forEach(lightClearStar);
+      clearScoreFrame = null;
+    }
+  }
+  clearScoreFrame = requestAnimationFrame(frame);
 }
 
 // ------------------------------------------------------------ leaderboard
@@ -267,16 +372,20 @@ $('menuMapBtn').addEventListener('click', () => {
 });
 $('mapBackBtn').addEventListener('click', () => { sound.blip(); show('menu'); });
 $('hudMapBtn').addEventListener('click', () => {
-  sound.blip(); game.stop(); buildMap(); renderBoard(); show('map');
+  sound.blip(); game.stop(); resetPresentations(); buildMap(); renderBoard(); show('map');
 });
 $('hudRetryBtn').addEventListener('click', () => {
   sound.blip(); const i = game.levelIndex; game.stop(); startLevel(i);
 });
 $('nextBtn').addEventListener('click', (e) => startLevel(Number(e.currentTarget.dataset.next)));
 $('clearReplay').addEventListener('click', (e) => startLevel(Number(e.currentTarget.dataset.level)));
-$('clearMapBtn').addEventListener('click', () => { sound.blip(); buildMap(); renderBoard(); show('map'); });
+$('clearMapBtn').addEventListener('click', () => {
+  sound.blip(); resetPresentations(); buildMap(); renderBoard(); show('map');
+});
 $('failRetryBtn').addEventListener('click', () => { sound.blip(); startLevel(game.levelIndex); });
-$('failMapBtn').addEventListener('click', () => { sound.blip(); buildMap(); renderBoard(); show('map'); });
+$('failMapBtn').addEventListener('click', () => {
+  sound.blip(); resetPresentations(); buildMap(); renderBoard(); show('map');
+});
 
 $('shareBtn').addEventListener('click', async () => {
   const text = `I won back ${totalStars()} ⭐ of maple candy in SNOWBALL SLINGER, Btown's slingshot showdown! ${location.href}`;

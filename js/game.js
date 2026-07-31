@@ -7,6 +7,7 @@ import { createSim } from './sim.js';
 import { sound } from './audio.js';
 
 const SETTLE_GRACE = 2.6; // max seconds to wait for the dust to settle
+const CHAIN_MILESTONE = 3;
 
 export function createGame(canvas, renderer, ui) {
   const game = {
@@ -14,12 +15,14 @@ export function createGame(canvas, renderer, ui) {
     levelIndex: 0, level: null, sim: null,
     score: 0, ammoQueue: [], shotsUsed: 0,
     activeProj: null, loadedMesh: null,
-    introT: 0, settleT: 0, aim: null,
+    introT: 0, settleT: 0, aim: null, shotChain: null,
+    runId: 0,
   };
 
   function hudAmmo() { ui.onAmmo(game.ammoQueue, game.level.ammo.length); }
 
   game.start = (levelIndex) => {
+    game.runId++;
     game.levelIndex = levelIndex;
     game.level = LEVELS[levelIndex];
     game.sim = createSim(game.level);
@@ -29,6 +32,7 @@ export function createGame(canvas, renderer, ui) {
     game.ammoQueue = [...game.level.ammo];
     game.activeProj = null;
     game.aim = null;
+    game.shotChain = null;
     renderer.buildLevel(game.sim, game.level.locale);
     renderer.setTrajectory(null);
     renderer.setPouch(null);
@@ -43,6 +47,7 @@ export function createGame(canvas, renderer, ui) {
 
   function wireEvents() {
     const { sim } = game;
+    const runId = game.runId;
     sim.on('blockBreak', ({ block }) => {
       const pts = MATERIALS[block.def.m].points;
       addScore(pts, block.body.position);
@@ -55,7 +60,9 @@ export function createGame(canvas, renderer, ui) {
     sim.on('bonk', ({ squirrel }) => {
       addScore(SCORE.squirrel, squirrel.body.position);
       sound.bonk();
-      setTimeout(() => sound.sparkle(), 220);
+      setTimeout(() => {
+        if (game.runId === runId) sound.sparkle();
+      }, 220);
       renderer.sparkles(squirrel.body.position, 8);
       renderer.bonkSquirrel(squirrel.body);
     });
@@ -73,7 +80,19 @@ export function createGame(canvas, renderer, ui) {
 
   function addScore(pts, worldPos) {
     game.score += pts;
+    if (game.shotChain) {
+      game.shotChain.hits++;
+      game.shotChain.points += pts;
+    }
     ui.onScore(game.score, pts, worldPos ? renderer.worldToScreen(worldPos.x, worldPos.y) : null);
+  }
+
+  function resolveShotChain() {
+    const chain = game.shotChain;
+    game.shotChain = null;
+    if (!chain || chain.hits < CHAIN_MILESTONE) return;
+    sound.chain(chain.hits);
+    ui.onChain(chain.hits, chain.points);
   }
 
   // ------------------------------------------------------------- aiming
@@ -149,7 +168,9 @@ export function createGame(canvas, renderer, ui) {
     const proj = game.sim.fire(type, v);
     proj.body.position.set(SLING.x + dx, Math.max(SLING.y + dy, 0.4), 0);
     game.activeProj = proj;
+    game.shotChain = { hits: 0, points: 0 };
     renderer.attachProjectile(proj);
+    renderer.beginShotTrail(proj.body);
     renderer.setPouch(null);
     renderer.setCameraMode('follow', proj.body);
     sound.fling(len / SLING.maxPull);
@@ -198,6 +219,7 @@ export function createGame(canvas, renderer, ui) {
 
     if (game.state === 'flying') {
       if (game.sim.cleared() || game.sim.projectileSpent(game.activeProj)) {
+        renderer.finishShotTrail();
         if (!game.activeProj.exploded) renderer.removeBodyMesh(game.activeProj.body);
         game.sim.retireProjectile(game.activeProj);
         game.activeProj = null;
@@ -208,6 +230,7 @@ export function createGame(canvas, renderer, ui) {
     } else if (game.state === 'settling') {
       game.settleT += dt;
       if (game.sim.settled() || game.settleT > SETTLE_GRACE) {
+        resolveShotChain();
         if (game.sim.cleared()) finish(true);
         else if (game.ammoQueue.length === 0) finish(false);
         else loadNext();
@@ -216,11 +239,14 @@ export function createGame(canvas, renderer, ui) {
   };
 
   game.stop = () => {
+    game.runId++;
     game.state = 'off';
+    game.shotChain = null;
     if (game.loadedMesh) { renderer.releaseMesh(game.loadedMesh); game.loadedMesh = null; }
     if (game.activeProj) { renderer.removeBodyMesh(game.activeProj.body); game.activeProj = null; }
     renderer.setTrajectory(null);
     renderer.setPouch(null);
+    renderer.cancelShotTrail();
   };
 
   return game;
