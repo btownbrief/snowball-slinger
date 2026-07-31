@@ -136,6 +136,15 @@ class SoundEngine {
     this._tone(2093, 0.22, { type: 'sine', gain: 0.07, delay: 0.06, attack: 0.001 });
   }
 
+  // A whole-shot chain resolving after the fort settles.
+  chain(count = 3) {
+    if (!this.ready()) return;
+    const root = 440 + Math.min(count - 3, 5) * 35;
+    this._tone(root, 0.2, { type: 'triangle', gain: 0.12, slideTo: root * 1.25 });
+    this._tone(root * 1.5, 0.28, { type: 'sine', gain: 0.1, delay: 0.09, slideTo: root * 2 });
+    this._noise(0.16, { type: 'highpass', freq: 3600, gain: 0.04, delay: 0.08 });
+  }
+
   // Level cleared: maple fanfare.
   fanfare(stars = 3) {
     if (!this.ready()) return;

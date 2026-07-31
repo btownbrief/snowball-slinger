@@ -196,7 +196,17 @@ export function createRenderer(canvas) {
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }), 24);
   trajMesh.count = 0;
   scene.add(trajMesh);
+  const ghostMesh = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(0.065, 5, 5),
+    new THREE.MeshBasicMaterial({
+      color: 0xdff1ff, transparent: true, opacity: 0.28, depthWrite: false,
+    }), 28);
+  ghostMesh.count = 0;
+  scene.add(ghostMesh);
   const tmpMat4 = new THREE.Matrix4();
+  let trackedShot = null;
+  let trackedPoints = [];
+  let lastTrackedPoint = null;
 
   // ---------------------------------------------------------- locale sets
   const localeGroups = {};
@@ -399,6 +409,7 @@ export function createRenderer(canvas) {
     levelGroup = new THREE.Group();
     scene.add(levelGroup);
     bodyMeshes.clear();
+    clearShotTrail();
     setLocale(locale);
     sim.blocks.forEach((b, i) => bodyMeshes.set(b.body.id, blockMesh(b, i)));
     sim.squirrels.forEach((s) => bodyMeshes.set(s.body.id, squirrelMesh(s.def)));
@@ -419,6 +430,56 @@ export function createRenderer(canvas) {
       m.position.copy(body.position);
       m.quaternion.copy(body.quaternion);
     }
+    sampleShotTrail();
+  }
+
+  // The live path stays private until a shot ends; only then does it replace
+  // the faint previous-shot guide. This is visual history, never aim logic.
+  function sampleShotTrail() {
+    if (!trackedShot || trackedPoints.length >= 120) return;
+    const { x, y, z } = trackedShot.position;
+    if (lastTrackedPoint) {
+      const dx = x - lastTrackedPoint.x;
+      const dy = y - lastTrackedPoint.y;
+      const dz = z - lastTrackedPoint.z;
+      if (dx * dx + dy * dy + dz * dz < 0.09) return;
+    }
+    lastTrackedPoint = { x, y, z };
+    trackedPoints.push(lastTrackedPoint);
+  }
+
+  function beginShotTrail(body) {
+    trackedShot = body;
+    trackedPoints = [];
+    lastTrackedPoint = null;
+    sampleShotTrail();
+  }
+
+  function finishShotTrail() {
+    sampleShotTrail();
+    const count = Math.min(trackedPoints.length, 28);
+    ghostMesh.count = count;
+    for (let i = 0; i < count; i++) {
+      const at = count === 1 ? 0 : Math.round((i * (trackedPoints.length - 1)) / (count - 1));
+      const p = trackedPoints[at];
+      tmpMat4.makeTranslation(p.x, p.y, p.z);
+      ghostMesh.setMatrixAt(i, tmpMat4);
+    }
+    ghostMesh.instanceMatrix.needsUpdate = true;
+    trackedShot = null;
+    trackedPoints = [];
+    lastTrackedPoint = null;
+  }
+
+  function cancelShotTrail() {
+    trackedShot = null;
+    trackedPoints = [];
+    lastTrackedPoint = null;
+  }
+
+  function clearShotTrail() {
+    cancelShotTrail();
+    ghostMesh.count = 0;
   }
 
   // --------------------------------------------------- asset ownership
@@ -690,6 +751,7 @@ export function createRenderer(canvas) {
     update, resize, buildLevel, attachProjectile, syncBodies, removeBodyMesh, releaseMesh,
     burstDebris, puff, sparkles, bonkSquirrel, squash,
     setCameraMode, pointerToWorld, worldToScreen, setPouch, setTrajectory,
+    beginShotTrail, finishShotTrail, cancelShotTrail,
     projectileMesh, POUCH_REST, colors: COLORS,
     stats: () => ({ fps: Math.round(fpsEma), tier: qualityTier, drawCalls: renderer.info.render.calls }),
   };
